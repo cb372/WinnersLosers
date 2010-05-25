@@ -11,6 +11,7 @@ from datetime import datetime, date
 from pprint import pprint
 from operator import itemgetter
 
+# Set up logging using config file
 logging.config.fileConfig("logging.conf")
 logger = logging.getLogger("WinnersLosers")
 
@@ -46,7 +47,7 @@ def parseHeader(cells):
 	"""
 	 Ignore the first cell, which will be empty
 	 or will just say 'Date' or something like that.
-	Trim the remaining cells.
+	Trim spaces from the remaining cells.
 	"""
 	return [s.strip() for s in cells[1:]]
 
@@ -70,8 +71,4 @@ def parseRow(cells, shareCodes, dateFormat='%b-%y'):
 				logger.debug("Failed to parse price '%s' for share code %s", priceString, shareCode) 
 	return (theDate,sharePrices)
 
-
-if __name__ == "__main__":
-    import doctest
-    doctest.testmod()
 
