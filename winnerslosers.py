@@ -112,6 +112,7 @@ def pickWinnersLosers(dates, shareCodes, startDate, months, numWinnersLosers):
 
 	# For each month
 	for (date, prices) in relevantMonths:
+	# TODO Rm should be based on average of all shares, not total?
 		# Calculate market return Rm
 		marketTotal = sumDictValues(prices)
 		marketReturn = calcPercentReturn(prevMarketTotal, marketTotal)	
