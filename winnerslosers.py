@@ -60,33 +60,27 @@ def outputWinnersLosersData(dates, winnersAndLosers, monthsToOutput, startDate):
 
 	# Prices of each share and market total in the month before startDate
 	prevPrices = pricesBeforeStart
-	prevMarketTotal = sumDictValues(pricesBeforeStart)
+	lastKnownPrices = pricesBeforeStart
 	
-	# TODO for now, copy-paste the code from pickWinnersLosers.
-	# Still not sure exactly what we should be outputting
+	# TODO output to file
 	for (date, prices) in relevantMonths:
-		marketTotal = sumDictValues(prices) 
-		marketReturn = calcPercentReturn(prevMarketTotal, marketTotal)	
-		prevMarketTotal = marketTotal
-		logger.info("Market return for %s = %s%%", date, marketReturn)
-		logger.info("Market total price = %s", marketTotal)	
+		# Calculate market average return Rm
+		marketAvgReturn = calcMarketAverageReturn(date, prevPrices, prices)
+
 		for winner in winnersAndLosers['winners']:
-			if winner not in prices:
-				logger.info("%s: Price missing for share code %s. Setting equal to previous price %s", date, winner, prevPrices[winner])
-				prices[winner] = prevPrices[winner]
+			# Calculate return Rj and residual Rj - Rm for this share 
+			(absoluteReturn, percentReturn, residual) = calcShareResidual(date, winner, lastKnownPrices, prices, marketAvgReturn)
+			
+			logger.info("Winner [%s]\tAbsolute return = %s,\tPercentage return = %s%%\tResidual = %s%%", winner, absoluteReturn, percentReturn, residual)	
 
-			shareReturn = calcPercentReturn(prevPrices[winner], prices[winner])
-			prevPrices[winner] = prices[winner]
-			logger.info("Winner [%s] return: %s%%", winner, shareReturn)	
 		for loser in winnersAndLosers['losers']:
-			if loser not in prices:
-				logger.info("%s: Price missing for share code %s. Setting equal to previous price %s", date, loser, prevPrices[loser])
-				prices[loser] = prevPrices[loser]
+			# Calculate return Rj and residual Rj - Rm for this share 
+			(absoluteReturn, percentReturn, residual) = calcShareResidual(date, loser, lastKnownPrices, prices, marketAvgReturn)
+			
+			logger.info("Loser [%s]\tAbsolute return = %s,\tPercentage return = %s%%\tResidual = %s%%", loser, absoluteReturn, percentReturn, residual)	
 
-			shareReturn = calcPercentReturn(prevPrices[loser], prices[loser])
-			prevPrices[loser] = prices[loser]
-			logger.info("Loser [%s] return: %s%%", loser, shareReturn)	
-	
+		# Update prevPrices before moving on to next month
+		prevPrices = prices
 
 def pickWinnersLosers(dates, shareCodes, startDate, months, numWinnersLosers):
 	"""
@@ -103,38 +97,28 @@ def pickWinnersLosers(dates, shareCodes, startDate, months, numWinnersLosers):
 	relevantMonths = dates[firstIndex:startDateIndex]
 	logger.info("Calculating winners and losers from %s to %s", relevantMonths[0][0], relevantMonths[-1][0])
 
-	# Prices of each share and market total in the month before portfolio generation
+	# Prices of each share in the month before portfolio generation
 	prevPrices = pricesBeforeStart
-	prevMarketTotal = sumDictValues(pricesBeforeStart)
+	lastKnownPrices = pricesBeforeStart
 	
 	# All cumulative residuals start at 0
 	cumResiduals = dict.fromkeys(pricesBeforeStart.keys(), 0.0)	
 
 	# For each month
 	for (date, prices) in relevantMonths:
-	# TODO Rm should be based on average of all shares, not total?
-		# Calculate market return Rm
-		marketTotal = sumDictValues(prices)
-		marketReturn = calcPercentReturn(prevMarketTotal, marketTotal)	
-		prevMarketTotal = marketTotal
-		logger.info("Market return for %s = %s%%", date, marketReturn)
+		# Calculate market average return Rm
+		marketAvgReturn = calcMarketAverageReturn(date, prevPrices, prices)
 		
 		# For each share	
-		for shareCode in cumResiduals.keys():
-			# Deal with missing prices
-			if shareCode not in prices:
-				logger.info("%s: Price missing for share code %s. Setting equal to previous price %s", date, shareCode, prevPrices[shareCode])
-				prices[shareCode] = prevPrices[shareCode]
-	
-			# Calculate share return Rj
-			shareReturn = calcPercentReturn(prevPrices[shareCode], prices[shareCode])
-			prevPrices[shareCode] = prices[shareCode]
-
-			# Calculate residual Rj - Rm
-			residual = shareReturn - marketReturn
+		for shareCode in cumResiduals:
+			# Calculate return Rj and residual Rj - Rm for this share 
+			(absoluteReturn, percentReturn, residual) = calcShareResidual(date, shareCode, lastKnownPrices, prices, marketAvgReturn)
 
 			# Add to cumulate residual for this share
 			cumResiduals[shareCode] += residual
+
+		# Update prevPrices before moving on to next month
+		prevPrices = prices
 
 	logger.debug("Cumulative residuals after portfolio generation: %s", cumResiduals)
 	
@@ -143,6 +127,53 @@ def pickWinnersLosers(dates, shareCodes, startDate, months, numWinnersLosers):
  
 	return {"losers":sortedShareCodes[0:numWinnersLosers], "winners":sortedShareCodes[-numWinnersLosers:]}
 
+
+def calcShareResidual(date, shareCode, lastKnownPrices, prices, marketAvgReturn):
+	"""
+	TODO the most important docstring of all!
+	"""
+	if shareCode in prices:
+		sharePrice = prices[shareCode]
+	else:
+		# Deal with missing prices
+		logger.info("%s: Price missing for share code %s. Setting equal to last known price %s", date, shareCode, lastKnownPrices[shareCode])
+		sharePrice = lastKnownPrices[shareCode]
+
+	# Calculate share return Rj
+	absoluteReturn = sharePrice - lastKnownPrices[shareCode]
+	percentReturn = calcPercentReturn(lastKnownPrices[shareCode], sharePrice)
+
+	# Update the last known price for this share
+	lastKnownPrices[shareCode] = sharePrice
+
+	# Calculate residual Rj - Rm
+	residual = percentReturn - marketAvgReturn
+
+	return (absoluteReturn, percentReturn, residual)
+
+
+def calcMarketAverageReturn(date, prevPrices, currPrices):
+	"""
+	Calculate the average percentage return for all
+	the shares that were in the market in both the previous month and this month.
+	Skip any shares which have dropped out of the market this month.
+
+	The date is only used for logging. 
+	"""
+	marketSumReturn = 0.0
+	marketSharesCount = 0
+	for shareCode in prevPrices:
+		if shareCode in currPrices:
+			marketSumReturn += calcPercentReturn(prevPrices[shareCode], currPrices[shareCode])
+			marketSharesCount += 1
+		else:
+			logger.info("%s: Share code %s appears to have dropped out of the market.", date, shareCode)
+	marketAvgReturn = marketSumReturn / marketSharesCount	
+
+	logger.info("Market avge return for %s = %s%% (%s shares)", date, marketAvgReturn, marketSharesCount)
+	return marketAvgReturn
+
+	
 def calcPercentReturn(prevValue, currValue):
 	"""
 	Calculate a share's return (difference between last
