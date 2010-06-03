@@ -41,10 +41,10 @@ def main(argv):
 	winnersAndLosers = pickWinnersLosers(dates, shareCodes, startDate, portfolioMonths, numWinnersLosers, options.useMarketTotalReturn)
 
 	# Output performance data for the winners and losers
-	outputWinnersLosersData(outputFile, dates, winnersAndLosers, outputMonths, startDate)
+	outputWinnersLosersData(outputFile, dates, winnersAndLosers, outputMonths, startDate, options.useMarketTotalReturn)
 
 
-def outputWinnersLosersData(outputFile, dates, winnersAndLosers, monthsToOutput, startDate):
+def outputWinnersLosersData(outputFile, dates, winnersAndLosers, monthsToOutput, startDate, useMarketTotalReturn):
 	"""
 	Given the lists of winners and losers, output performance data
 	for those shares and for the market as a whole, for a given number
@@ -53,12 +53,17 @@ def outputWinnersLosersData(outputFile, dates, winnersAndLosers, monthsToOutput,
 	dates is a list of (month, {shareCode->price}) tuples in ascending date order.
 	winnersAndLosers is a dict of the form {"winners"->[winner1,winner2,...], "losers"->[loser1,loser2,...]}
 	where winnerN, loserN are share codes. 
+	useMarketTotalReturn is a boolean. 
+		true = use the market's total percentage return to calculate each share's residual.
+		false = use the average percentage return of all the shares in the market.
 	"""
 	startDateIndex = findDate(dates, startDate)
 	lastIndex = calcOutputLastIndex(dates, monthsToOutput, startDateIndex)
 	pricesBeforeStart = dates[startDateIndex-1][1]
 	relevantMonths = dates[startDateIndex:lastIndex] 	
-	logger.info("Outputting winners and losers performance data from %s to %s", relevantMonths[0][0], relevantMonths[-1][0])
+	logger.info("Outputting winners and losers performance data from %s to %s.", relevantMonths[0][0], relevantMonths[-1][0]) 
+	logger.info("Using %s to calc residuals.", "market total return" if useMarketTotalReturn else "market average return")
+	logger.info("Writing to file %s...", outputFile)
 
 	# Prices of each share and market total in the month before startDate
 	prevPrices = pricesBeforeStart
@@ -67,11 +72,12 @@ def outputWinnersLosersData(outputFile, dates, winnersAndLosers, monthsToOutput,
 	with open(outputFile, 'w') as f:
 		writer = csv.writer(f)
 		csvoutput.writeCsvHeader(writer, winnersAndLosers)
+		logger.info("Wrote CSV header")
 
 		for (date, prices) in relevantMonths:
 			row = [date.strftime('%b-%Y')]
 			
-			# Calculate market average return Rm
+			# Calculate market average return 
 			marketAvgReturn = calcMarketAverageReturn(date, prevPrices, prices)
 			row += [marketAvgReturn]
 
@@ -79,18 +85,24 @@ def outputWinnersLosersData(outputFile, dates, winnersAndLosers, monthsToOutput,
 			marketTotalReturn = calcMarketTotalReturn(date, prevPrices, prices)
 			row += [marketTotalReturn]
 
+			# Choose appropriate Rm based on user setting
+			if useMarketTotalReturn:
+				Rm = marketTotalReturn
+			else:
+				Rm = marketAvgReturn
+	
 			for winner in winnersAndLosers['winners']:
 				# Calculate return Rj and residual Rj - Rm for this share 
-				(absoluteReturn, percentReturn, residual) = calcShareResidual(date, winner, lastKnownPrices, prices, marketAvgReturn)
+				(absoluteReturn, percentReturn, residual) = calcShareResidual(date, winner, lastKnownPrices, prices, Rm)
 				
-				logger.info("Winner [%s]\tAbsolute return = %s,\tPercentage return = %s%%\tResidual = %s%%", winner, absoluteReturn, percentReturn, residual)	
+				logger.debug("Winner [%s]\tAbsolute return = %s,\tPercentage return = %s%%\tResidual = %s%%", winner, absoluteReturn, percentReturn, residual)	
 				row += [absoluteReturn, percentReturn, residual]
 
 			for loser in winnersAndLosers['losers']:
 				# Calculate return Rj and residual Rj - Rm for this share 
-				(absoluteReturn, percentReturn, residual) = calcShareResidual(date, loser, lastKnownPrices, prices, marketAvgReturn)
+				(absoluteReturn, percentReturn, residual) = calcShareResidual(date, loser, lastKnownPrices, prices, Rm)
 				
-				logger.info("Loser [%s]\tAbsolute return = %s,\tPercentage return = %s%%\tResidual = %s%%", loser, absoluteReturn, percentReturn, residual)	
+				logger.debug("Loser [%s]\tAbsolute return = %s,\tPercentage return = %s%%\tResidual = %s%%", loser, absoluteReturn, percentReturn, residual)	
 				row += [absoluteReturn, percentReturn, residual]
 
 			# Update prevPrices before moving on to next month
@@ -98,6 +110,11 @@ def outputWinnersLosersData(outputFile, dates, winnersAndLosers, monthsToOutput,
 
 			# Output row to CSV file
 			writer.writerow(row)
+
+			logger.info("Wrote data for %s", date)
+		
+		logger.info("Finished! Now open the file in Excel and crunch those numbers.")
+
 def pickWinnersLosers(dates, shareCodes, startDate, months, numWinnersLosers, useMarketTotalReturn):
 	"""
 	Create a portfolio, i.e. calculate the winners and losers for a
@@ -114,8 +131,8 @@ def pickWinnersLosers(dates, shareCodes, startDate, months, numWinnersLosers, us
 	firstIndex = calcPortfolioStartIndex(months, startDateIndex)
 	pricesBeforeStart = dates[firstIndex-1][1]
 	relevantMonths = dates[firstIndex:startDateIndex]
-	logger.info("Calculating winners and losers from %s to %s using %s to calc residuals", relevantMonths[0][0], relevantMonths[-1][0],
-			"market total return" if useMarketTotalReturn else "market average return")
+	logger.info("Calculating winners and losers from %s to %s.", relevantMonths[0][0], relevantMonths[-1][0])
+	logger.info("Using %s to calc residuals.", "market total return" if useMarketTotalReturn else "market average return")
 
 	# Prices of each share in the month before portfolio generation
 	prevPrices = pricesBeforeStart
@@ -137,8 +154,6 @@ def pickWinnersLosers(dates, shareCodes, startDate, months, numWinnersLosers, us
 			Rm = marketTotalReturn
 		else:
 			Rm = marketAvgReturn
-	
-		logger.info("Rm = %s", Rm)
  
 		# For each share	
 		for shareCode in cumResiduals:
@@ -155,6 +170,8 @@ def pickWinnersLosers(dates, shareCodes, startDate, months, numWinnersLosers, us
 	
 	# Sort shares in order of cumulative residual
 	sortedShareCodes = sorted(cumResiduals, key=lambda s: cumResiduals[s])		
+
+	logger.info("Finished picking winners and losers.")
  
 	return {"losers":sortedShareCodes[0:numWinnersLosers], "winners":sortedShareCodes[-numWinnersLosers:]}
 
@@ -303,7 +320,7 @@ def createOptions():
 	parser.add_option("-m", "--months", dest="outputMonths", type="int", 
 			help="Months of data to output. Default: equal to portfolioMonths")
 	parser.add_option("-t", "--totalreturn", action="store_true", dest="useMarketTotalReturn",
-				help="Use market total % return to calculate residuals when creating portfolio. (Default: use market average % return)")
+				help="Use market total % return to calculate residuals. (Default: use market average % return)")
 	return parser
 
 # Allow file to be run as "python winnerslosers.py <optionsAndArgs>"
