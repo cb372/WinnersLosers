@@ -1,5 +1,6 @@
 # coding:UTF-8
 
+import os
 import sys
 import re
 import logging
@@ -12,7 +13,7 @@ from pprint import pprint
 from operator import itemgetter
 
 # Set up logging using config file
-logging.config.fileConfig("logging.conf")
+logging.config.fileConfig(os.path.join(sys.path[0], "logging.conf"))
 logger = logging.getLogger("WinnersLosers")
 
 def parseCsvFile(csvFile, dateFormat='%b-%y'):

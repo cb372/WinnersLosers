@@ -1,5 +1,6 @@
 # coding:UTF-8
 
+import os
 import sys
 import math
 import csvparser
@@ -11,7 +12,7 @@ from datetime import datetime, date
 from pprint import pprint
 from optparse import OptionParser
 
-logging.config.fileConfig("logging.conf")
+logging.config.fileConfig(os.path.join(sys.path[0], "logging.conf"))
 logger = logging.getLogger("WinnersLosers")
 
 def main(argv):

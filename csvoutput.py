@@ -1,5 +1,6 @@
 # coding:UTF-8
 
+import os
 import sys
 import math
 import csv
@@ -7,7 +8,7 @@ import logging
 import logging.config
 from datetime import datetime, date
 
-logging.config.fileConfig("logging.conf")
+logging.config.fileConfig(os.path.join(sys.path[0], "logging.conf"))
 logger = logging.getLogger("WinnersLosers")
 
 suffixes = [
