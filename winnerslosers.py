@@ -172,6 +172,8 @@ def pickWinnersLosers(dates, shareCodes, startDate, months, numWinnersLosers, us
 	# Sort shares in order of cumulative residual
 	sortedShareCodes = sorted(cumResiduals, key=lambda s: cumResiduals[s])		
 
+	logger.debug("Sorted cumulative residuals: %s", sortedShareCodes)
+
 	logger.info("Finished picking winners and losers.")
  
 	return {"losers":sortedShareCodes[0:numWinnersLosers], "winners":sortedShareCodes[-numWinnersLosers:]}
